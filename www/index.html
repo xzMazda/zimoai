@@ -236,7 +236,8 @@
 
     <script>
         if (window.Capacitor) {
-            var { Filesystem, Directory, Encoding, App } = window.Capacitor.Plugins;
+            var Filesystem = window.Capacitor.Plugins.Filesystem;
+            var App = window.Capacitor.Plugins.App;
         }
         
         let currentDir = 'Documents';
@@ -397,7 +398,7 @@
                 let innerHtml = `<span class="chat-title">${chat.title}</span>`;
                 if (chat.id === currentChatId) {
                     innerHtml += `<button class="delete-chat-btn" onclick="deleteChat(${chat.id}, event)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></line><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     </button>`;
                 }
                 btn.innerHTML = innerHtml;
@@ -599,13 +600,13 @@
                     }
 
                     if (action === 'create') {
-                        await Filesystem.writeFile({ path: fullPath, data: '', directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
+                        await Filesystem.writeFile({ path: fullPath, data: '', directory: "DOCUMENTS", encoding: "utf8", recursive: true });
                         showToast(`Файл создан: ${fullPath} (Ищите в папке Документы)`);
                     } else if (action === 'folder') {
-                        await Filesystem.mkdir({ path: fullPath, directory: Directory.Documents, recursive: true });
+                        await Filesystem.mkdir({ path: fullPath, directory: "DOCUMENTS", recursive: true });
                         showToast(`Папка создана: ${fullPath} (Ищите в папке Документы)`);
                     } else if (action === 'delete') {
-                        await Filesystem.rmdir({ path: fullPath, directory: Directory.Documents, recursive: true });
+                        await Filesystem.rmdir({ path: fullPath, directory: "DOCUMENTS", recursive: true });
                         showToast(`Удалено: ${fullPath}`);
                     }
                 } catch (e) { 
@@ -970,12 +971,15 @@
         window.onload = function() {
             loadState();
             if (window.Capacitor && Filesystem) {
-                // При старте пытаемся создать тестовый файл. Если не выйдет — открываем настройки "Все файлы"
+                Filesystem.requestPermissions().then(status => {
+                    console.log("Permission requested:", status);
+                });
+                // Проверка доступа при старте
                 Filesystem.writeFile({
-                    path: 'zimo_permission_check.txt',
+                    path: 'zimo_check.txt',
                     data: 'test',
-                    directory: Directory.Documents,
-                    encoding: Encoding.UTF8
+                    directory: "DOCUMENTS",
+                    encoding: "utf8"
                 }).catch(err => {
                     if (App) {
                         App.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
@@ -985,4 +989,4 @@
         };
     </script>
 </body>
-                </html>
+    </html>
