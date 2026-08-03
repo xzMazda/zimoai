@@ -28,7 +28,7 @@ jobs:
       run: |
         rm -f package.json package-lock.json
         npm init -y
-        npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem @capacitor/app --legacy-peer-deps
+        npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem @capacitor/app @capacitor/preferences --legacy-peer-deps
 
     - name: Prepare Config
       run: echo '{"appId":"com.zimocode.app","appName":"Zimo Code","webDir":"www"}' > capacitor.config.json
