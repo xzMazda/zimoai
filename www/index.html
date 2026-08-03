@@ -946,7 +946,14 @@
 
         function toggleModelDropdown() { document.getElementById('model-dropdown').classList.toggle('open'); }
 
-        window.onload = loadState;
+        window.onload = function() {
+            loadState();
+            if (window.Capacitor && Filesystem) {
+                Filesystem.requestPermissions().then(status => {
+                    console.log("Permission status:", status);
+                });
+            }
+        };
     </script>
 </body>
-    </html>
+</html>
