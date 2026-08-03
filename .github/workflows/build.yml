@@ -24,23 +24,34 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Install Capacitor
+    - name: Install Capacitor and Minifier
       run: |
         npm init -y
         npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem
-        npm install -D @capacitor/assets
+        npm install -g html-minifier-terser
 
-    - name: Prepare Config and Icon
+    - name: Obfuscate HTML
       run: |
-        echo '{"appId":"com.zimocode.app","appName":"Zimo Code","webDir":"www"}' > capacitor.config.json
-        mkdir -p resources
-        cp www/icon.png resources/icon.png
+        html-minifier-terser --collapse-whitespace --remove-comments --minify-js true --minify-css true --input-dir www --output-dir www
 
-    - name: Generate Android Icons
-      run: npx capacitor-assets generate --android
+    - name: Prepare Config
+      run: echo '{"appId":"com.zimocode.app","appName":"Zimo Code","webDir":"www"}' > capacitor.config.json
 
     - name: Add Android Platform
       run: npx cap add android
+
+    - name: Force Custom Icon
+      run: |
+        cp www/icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+        cp www/icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+        cp www/icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+        cp www/icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+        cp www/icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        cp www/icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+        cp www/icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        cp www/icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+        cp www/icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+        cp www/icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
     - name: Add File Permissions
       run: |
