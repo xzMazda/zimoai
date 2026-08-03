@@ -597,7 +597,13 @@
                         await Filesystem.rmdir({ path: args, directory: Directory.Documents, recursive: true });
                         showToast(`Удалено: ${args}`);
                     }
-                } catch (e) { showToast(`Ошибка ФС: ${e.message}`); }
+                } catch (e) { 
+                    if (e.message.includes('denied') || e.message.includes('permission')) {
+                        showToast("Нет доступа к файлам. Открой настройки приложения и выдай разрешение.");
+                    } else {
+                        showToast(`Ошибка ФС: ${e.message}`); 
+                    }
+                }
             } else {
                 showToast(`Mock: ${action} ${args}`);
             }
@@ -949,8 +955,19 @@
         window.onload = function() {
             loadState();
             if (window.Capacitor && Filesystem) {
-                Filesystem.requestPermissions().then(status => {
-                    console.log("Permission status:", status);
+                Filesystem.requestPermissions().then(async (status) => {
+                    // Проверяем, есть ли доступ к файлам
+                    try {
+                        await Filesystem.writeFile({
+                            path: 'zimo_permission_check.txt',
+                            data: 'test',
+                            directory: Directory.Documents,
+                            encoding: Encoding.UTF8
+                        });
+                    } catch (e) {
+                        // Если нет доступа, просим пользователя выдать его вручную
+                        showToast("Выдайте доступ к файлам в настройках приложения");
+                    }
                 });
             }
         };
