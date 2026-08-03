@@ -252,6 +252,7 @@ Telegram - ZimoAiChat
 if (window.Capacitor) {
 var Fs = window.Capacitor.Plugins.Filesystem;
 var AppC = window.Capacitor.Plugins.App;
+var Pref = window.Capacitor.Plugins.Preferences;
 }
 
 let curDir = 'Documents';
@@ -273,290 +274,292 @@ const defMods = [];
 let myMods = [];
 let curMod = null;
 
+async function setVal(key, val) {
+    if (window.Capacitor && Pref) {
+        await Pref.set({ key, value: val });
+    } else {
+        localStorage.setItem(key, val);
+    }
+}
+
+async function getVal(key) {
+    if (window.Capacitor && Pref) {
+        const { value } = await Pref.get({ key });
+        return value;
+    } else {
+        return localStorage.getItem(key);
+    }
+}
+
 function saveAll() {
-localStorage.setItem('zimo_all_chats', JSON.stringify(chatsArr));
-localStorage.setItem('zimo_current_id', curChtId);
-localStorage.setItem('zimo_current_model', JSON.stringify(curMod));
-localStorage.setItem('zimo_user_prompt', usrPrm);
-localStorage.setItem('zimo_custom_models', JSON.stringify(myMods));
-localStorage.setItem('zimo_local', isLocal);
-localStorage.setItem('zimo_reasoning', isThink);
+    setVal('zimo_all_chats', JSON.stringify(chatsArr));
+    setVal('zimo_current_id', String(curChtId));
+    setVal('zimo_current_model', JSON.stringify(curMod));
+    setVal('zimo_user_prompt', usrPrm);
+    setVal('zimo_custom_models', JSON.stringify(myMods));
+    setVal('zimo_local', String(isLocal));
+    setVal('zimo_reasoning', String(isThink));
 }
 
 async function loadKeys() {
-if (!window.Capacitor || !Fs) return;
-try {
-const result = await Fs.readFile({ path: 'Key.txt', directory: "DOCUMENTS", encoding: "utf8" });
-const lines = result.data.split('\n');
-lines.forEach(line => {
-if (!line.startsWith('#') && line.trim() !== '') {
-const parts = line.split(':');
-if (parts.length >= 2) {
-const key = parts[0];
-const name = parts[1];
-const url = parts[2] || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-if (!myMods.some(m => m.name === name)) {
-myMods.push({ name: name, apiName: name, url: url, key: key });
-}
-}
-}
-});
-saveAll();
-} catch (e) {
-console.log("Key.txt not found");
-}
+    if (!window.Capacitor || !Fs) return;
+    try {
+        const result = await Fs.readFile({ path: 'Key.txt', directory: "DOCUMENTS", encoding: "utf8" });
+        const lines = result.data.split('\n');
+        lines.forEach(line => {
+            if (!line.startsWith('#') && line.trim() !== '') {
+                const parts = line.split(':');
+                if (parts.length >= 2) {
+                    const key = parts[0];
+                    const name = parts[1];
+                    const url = parts[2] || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+                    if (!myMods.some(m => m.name === name)) {
+                        myMods.push({ name: name, apiName: name, url: url, key: key });
+                    }
+                }
+            }
+        });
+        saveAll();
+    } catch (e) {}
 }
 
 async function saveKeys() {
-if (!window.Capacitor || !Fs || localStorage.getItem('zimo_backup_agreed') !== 'true') return;
-let content = "# ключи ZimoAi, вы сами дали согласие на их сохранение, если не хотите их сохранять - удалите файл!\n";
-myMods.forEach(m => {
-content += `${m.key}:${m.name}:${m.url}\n`;
-});
-try {
-await Fs.writeFile({ path: 'Key.txt', data: content, directory: "DOCUMENTS", encoding: "utf8", recursive: true });
-} catch (e) {
-console.error("Error saving keys", e);
-}
+    if (!window.Capacitor || !Fs || await getVal('zimo_backup_agreed') !== 'true') return;
+    let content = "# ключи ZimoAi, вы сами дали согласие на их сохранение, если не хотите их сохранять - удалите файл!\n";
+    myMods.forEach(m => {
+        content += `${m.key}:${m.name}:${m.url}\n`;
+    });
+    try {
+        await Fs.writeFile({ path: 'Key.txt', data: content, directory: "DOCUMENTS", encoding: "utf8", recursive: true });
+    } catch (e) {}
 }
 
 async function loadAll() {
-await loadKeys();
-const savedChats = localStorage.getItem('zimo_all_chats');
-const savedId = localStorage.getItem('zimo_current_id');
-const savedModel = localStorage.getItem('zimo_current_model');
-const savedPrompt = localStorage.getItem('zimo_user_prompt');
-const savedCustomModels = localStorage.getItem('zimo_custom_models');
-const savedLocal = localStorage.getItem('zimo_local');
-const savedReasoning = localStorage.getItem('zimo_reasoning');
+    const savedChats = await getVal('zimo_all_chats');
+    const savedId = await getVal('zimo_current_id');
+    const savedModel = await getVal('zimo_current_model');
+    const savedPrompt = await getVal('zimo_user_prompt');
+    const savedCustomModels = await getVal('zimo_custom_models');
+    const savedLocal = await getVal('zimo_local');
+    const savedReasoning = await getVal('zimo_reasoning');
 
-if (savedChats) chatsArr = JSON.parse(savedChats);
-if (savedCustomModels) {
-let parsedModels = JSON.parse(savedCustomModels);
-parsedModels.forEach(pm => {
-if (!myMods.some(cm => cm.name === pm.name)) myMods.push(pm);
-});
-}
-if (savedModel) {
-curMod = JSON.parse(savedModel);
-if (!curMod.name) curMod.name = curMod.apiName;
-} else {
-curMod = null;
-}
+    if (savedChats) chatsArr = JSON.parse(savedChats);
+    if (savedCustomModels) myMods = JSON.parse(savedCustomModels);
+    if (savedModel) curMod = JSON.parse(savedModel);
+    if (savedPrompt) usrPrm = savedPrompt;
+    if (savedLocal !== null) isLocal = savedLocal === 'true';
+    if (savedReasoning !== null) isThink = savedReasoning === 'true';
+    if (savedId) curChtId = parseInt(savedId);
+    
+    await loadKeys();
 
-if (savedLocal !== null) isLocal = savedLocal === 'true';
-if (savedReasoning !== null) isThink = savedReasoning === 'true';
-updOpts();
+    if (chatsArr.length === 0) {
+        mkChat(false);
+    } else {
+        if (!curChtId || !chatsArr.find(c => c.id === curChtId)) {
+            curChtId = chatsArr[0].id;
+        }
+    }
 
-if (savedPrompt) {
-usrPrm = savedPrompt;
-document.getElementById('sys_prm_inpt').value = savedPrompt;
-} else {
-document.getElementById('sys_prm_inpt').value = usrPrm;
-}
+    document.getElementById('sys_prm_inpt').value = usrPrm;
+    document.getElementById('sys_prm_inpt').addEventListener('input', (e) => {
+        usrPrm = e.target.value;
+        saveAll();
+    });
 
-document.getElementById('sys_prm_inpt').addEventListener('input', (e) => {
-usrPrm = e.target.value;
-localStorage.setItem('zimo_user_prompt', usrPrm);
-});
-
-if (chatsArr.length === 0) {
-mkChat(false);
-} else {
-curChtId = savedId ? parseInt(savedId) : chatsArr[0].id;
-}
-drawChats();
-drawMsgs();
-drawMods();
-updNewBtn();
+    drawChats();
+    drawMsgs();
+    drawMods();
+    updOpts();
+    updNewBtn();
 }
 
 function updOpts() {
-document.getElementById('opt_loc').classList.toggle('active', isLocal);
-document.getElementById('opt_rsn').classList.toggle('active', isThink);
+    document.getElementById('opt_loc').classList.toggle('active', isLocal);
+    document.getElementById('opt_rsn').classList.toggle('active', isThink);
 }
 
 function getCht() { return chatsArr.find(c => c.id === curChtId); }
 
 function clrEmpt() {
-const active = getCht();
-if (active && active.messages.length === 0) {
-chatsArr = chatsArr.filter(c => c.id !== active.id);
-}
+    const active = getCht();
+    if (active && active.messages.length === 0) {
+        chatsArr = chatsArr.filter(c => c.id !== active.id);
+    }
 }
 
 function updNewBtn() {
-const chatObj = getCht();
-const newChatBtn = document.getElementById('new_cht_btn');
-if (chatObj && chatObj.messages.length === 0) {
-newChatBtn.classList.add('active-pill');
-} else {
-newChatBtn.classList.remove('active-pill');
-}
+    const chatObj = getCht();
+    const newChatBtn = document.getElementById('new_cht_btn');
+    if (chatObj && chatObj.messages.length === 0) {
+        newChatBtn.classList.add('active-pill');
+    } else {
+        newChatBtn.classList.remove('active-pill');
+    }
 }
 
 function mkChat(updateList = true) {
-clrEmpt(); 
-curChtId = Date.now();
-chatsArr.push({ id: curChtId, title: "Новый чат", messages: [] });
-clpsdBlks.clear();
-saveAll();
-if (updateList) {
-drawChats();
-drawMsgs();
-tglMnu(false);
-}
-updNewBtn();
+    clrEmpt(); 
+    curChtId = Date.now();
+    chatsArr.push({ id: curChtId, title: "Новый чат", messages: [] });
+    clpsdBlks.clear();
+    saveAll();
+    if (updateList) {
+        drawChats();
+        drawMsgs();
+        tglMnu(false);
+    }
+    updNewBtn();
 }
 
 function newCht() {
-if (isBusy) return;
-mkChat(true);
+    if (isBusy) return;
+    mkChat(true);
 }
 
 function swtchCht(id) {
-if (isBusy) return;
-if (curChtId === id) return; 
-clrEmpt(); 
-curChtId = id;
-clpsdBlks.clear();
-saveAll();
-drawChats();
-drawMsgs();
-tglMnu(false);
-updNewBtn();
+    if (isBusy) return;
+    if (curChtId === id) return; 
+    clrEmpt(); 
+    curChtId = id;
+    clpsdBlks.clear();
+    saveAll();
+    drawChats();
+    drawMsgs();
+    tglMnu(false);
+    updNewBtn();
 }
 
 function delCht(id, event) {
-if (event) event.stopPropagation();
-shwCnf(() => {
-chatsArr = chatsArr.filter(c => c.id !== id);
-if (curChtId === id) {
-if (chatsArr.length > 0) {
-curChtId = chatsArr[0].id;
-} else {
-mkChat(false);
-}
-}
-saveAll();
-drawChats();
-drawMsgs();
-updNewBtn();
-});
+    if (event) event.stopPropagation();
+    shwCnf(() => {
+        chatsArr = chatsArr.filter(c => c.id !== id);
+        if (curChtId === id) {
+            if (chatsArr.length > 0) {
+                curChtId = chatsArr[0].id;
+            } else {
+                mkChat(false);
+            }
+        }
+        saveAll();
+        drawChats();
+        drawMsgs();
+        updNewBtn();
+    });
 }
 
 function delMod(event, name) {
-event.stopPropagation();
-shwCnf(() => {
-myMods = myMods.filter(m => m.name !== name);
-if (curMod && curMod.name === name) curMod = null;
-saveAll();
-saveKeys();
-drawMods();
-popTst("Модель удалена");
-});
+    event.stopPropagation();
+    shwCnf(() => {
+        myMods = myMods.filter(m => m.name !== name);
+        if (curMod && curMod.name === name) curMod = null;
+        saveAll();
+        saveKeys();
+        drawMods();
+        popTst("Модель удалена");
+    });
 }
 
 function drawChats() {
-const list = document.getElementById('cht_hist_lst');
-list.innerHTML = '';
-[...chatsArr].reverse().forEach(chat => {
-const btn = document.createElement('div');
-btn.className = 'hstry_itm';
-if (chat.id === curChtId) btn.classList.add('actv_cht');
-let innerHtml = `<span class="cht_ttl">${chat.title}</span>`;
-if (chat.id === curChtId) {
-innerHtml += `<button class="del_cht_b" onclick="delCht(${chat.id}, event)">
-<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-</button>`;
-}
-btn.innerHTML = innerHtml;
-btn.onclick = () => swtchCht(chat.id);
-list.appendChild(btn);
-});
+    const list = document.getElementById('cht_hist_lst');
+    list.innerHTML = '';
+    [...chatsArr].reverse().forEach(chat => {
+        const btn = document.createElement('div');
+        btn.className = 'hstry_itm';
+        if (chat.id === curChtId) btn.classList.add('actv_cht');
+        let innerHtml = `<span class="cht_ttl">${chat.title}</span>`;
+        if (chat.id === curChtId) {
+            innerHtml += `<button class="del_cht_b" onclick="delCht(${chat.id}, event)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>`;
+        }
+        btn.innerHTML = innerHtml;
+        btn.onclick = () => swtchCht(chat.id);
+        list.appendChild(btn);
+    });
 }
 
 function drawMsgs() {
-const chatObj = getCht();
-const chat = document.getElementById('chat_cont');
-chat.innerHTML = '';
-if (!chatObj || chatObj.messages.length === 0) {
-chat.innerHTML = `<div id="welcm_scrn"><img src="icon.png" alt="Zimo"><p id="wlc_txt">${phrs[Math.floor(Math.random() * phrs.length)]}</p></div>`;
-document.body.classList.remove('chat-active');
-return;
-}
-document.body.classList.add('chat-active');
-chatObj.messages.forEach((msg, index) => {
-if (msg.role === 'user') {
-const userMsg = document.createElement('div');
-userMsg.className = 'msj usr';
-userMsg.innerText = msg.content;
-chat.appendChild(userMsg);
-} else {
-const wrapper = document.createElement('div');
-wrapper.className = 'ai_wrap';
-const aiMsg = document.createElement('div');
-aiMsg.className = 'msj bot';
-let msgHtml = "";
-const trimmedContent = msg.content.trimStart();
-if (trimmedContent.startsWith("+++")) {
-const secondPlus = trimmedContent.indexOf("+++", 3);
-if (secondPlus !== -1) {
-const reasoningText = trimmedContent.substring(3, secondPlus).trim();
-const displayContent = trimmedContent.substring(secondPlus + 3).trim();
-msgHtml += `<div class="rsn_blk" onclick="this.classList.toggle('open')"><div class="rsn_hd"><svg class="rsn_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Размышления...</div><div class="rsn_txt">${reasoningText}</div></div>`;
-msgHtml += mkMd(displayContent, false);
-} else {
-msgHtml += mkMd(msg.content, false);
-}
-} else {
-msgHtml += mkMd(msg.content, false);
-}
-aiMsg.innerHTML = msgHtml;
-wrapper.appendChild(aiMsg);
-const actions = document.createElement('div');
-actions.className = 'bot_acts';
-actions.innerHTML = `<button onclick="cpTxt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>`;
-if (index === chatObj.messages.length - 1) {
-actions.innerHTML += `<button class="rtry_btn" onclick="rtryMsg(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>`;
-}
-wrapper.appendChild(actions);
-chat.appendChild(wrapper);
-}
-});
-chat.scrollTop = chat.scrollHeight;
+    const chatObj = getCht();
+    const chat = document.getElementById('chat_cont');
+    chat.innerHTML = '';
+    if (!chatObj || chatObj.messages.length === 0) {
+        chat.innerHTML = `<div id="welcm_scrn"><img src="icon.png" alt="Zimo"><p id="wlc_txt">${phrs[Math.floor(Math.random() * phrs.length)]}</p></div>`;
+        document.body.classList.remove('chat-active');
+        return;
+    }
+    document.body.classList.add('chat-active');
+    chatObj.messages.forEach((msg, index) => {
+        if (msg.role === 'user') {
+            const userMsg = document.createElement('div');
+            userMsg.className = 'msj usr';
+            userMsg.innerText = msg.content;
+            chat.appendChild(userMsg);
+        } else {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'ai_wrap';
+            const aiMsg = document.createElement('div');
+            aiMsg.className = 'msj bot';
+            let msgHtml = "";
+            const trimmedContent = msg.content.trimStart();
+            if (trimmedContent.startsWith("+++")) {
+                const secondPlus = trimmedContent.indexOf("+++", 3);
+                if (secondPlus !== -1) {
+                    const reasoningText = trimmedContent.substring(3, secondPlus).trim();
+                    const displayContent = trimmedContent.substring(secondPlus + 3).trim();
+                    msgHtml += `<div class="rsn_blk" onclick="this.classList.toggle('open')"><div class="rsn_hd"><svg class="rsn_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Размышления...</div><div class="rsn_txt">${reasoningText}</div></div>`;
+                    msgHtml += mkMd(displayContent, false);
+                } else {
+                    msgHtml += mkMd(msg.content, false);
+                }
+            } else {
+                msgHtml += mkMd(msg.content, false);
+            }
+            aiMsg.innerHTML = msgHtml;
+            wrapper.appendChild(aiMsg);
+            const actions = document.createElement('div');
+            actions.className = 'bot_acts';
+            actions.innerHTML = `<button onclick="cpTxt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>`;
+            if (index === chatObj.messages.length - 1) {
+                actions.innerHTML += `<button class="rtry_btn" onclick="rtryMsg(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>`;
+            }
+            wrapper.appendChild(actions);
+            chat.appendChild(wrapper);
+        }
+    });
+    chat.scrollTop = chat.scrollHeight;
 }
 
 function popTst(message) {
-const toast = document.getElementById("tst_msg");
-toast.innerText = message;
-toast.classList.add("show");
-setTimeout(() => { toast.classList.remove("show"); }, 3000);
+    const toast = document.getElementById("tst_msg");
+    toast.innerText = message;
+    toast.classList.add("show");
+    setTimeout(() => { toast.classList.remove("show"); }, 3000);
 }
 
 let cnfCb = null;
 function shwCnf(callback) {
-cnfCb = callback;
-document.getElementById('cnf_ovo').classList.add('active');
+    cnfCb = callback;
+    document.getElementById('cnf_ovo').classList.add('active');
 }
 function hdCnf() {
-document.getElementById('cnf_ovo').classList.remove('active');
-cnfCb = null;
+    document.getElementById('cnf_ovo').classList.remove('active');
+    cnfCb = null;
 }
 document.getElementById('yes_btn').onclick = () => {
-if (cnfCb) cnfCb();
-hdCnf();
+    if (cnfCb) cnfCb();
+    hdCnf();
 };
 
-function accBkp() {
-localStorage.setItem('zimo_backup_agreed', 'true');
-document.getElementById('bkp_ovo').classList.remove('active');
-saveKeys();
+async function accBkp() {
+    await setVal('zimo_backup_agreed', 'true');
+    document.getElementById('bkp_ovo').classList.remove('active');
+    saveKeys();
 }
 
-function decBkp() {
-localStorage.setItem('zimo_backup_agreed', 'false');
-document.getElementById('bkp_ovo').classList.remove('active');
+async function decBkp() {
+    await setVal('zimo_backup_agreed', 'false');
+    document.getElementById('bkp_ovo').classList.remove('active');
 }
 
 function tglStt(state) { document.getElementById('sttngs_pnl').classList.toggle('active', state); }
@@ -566,527 +569,523 @@ function tglThk() { isThink = !isThink; updOpts(); saveAll(); }
 
 let selUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 function opnAdd() {
-document.getElementById('mod_drpdwn').classList.remove('open');
-document.getElementById('add_mod_ovo').classList.add('active');
+    document.getElementById('mod_drpdwn').classList.remove('open');
+    document.getElementById('add_mod_ovo').classList.add('active');
 }
 function clsAdd() { document.getElementById('add_mod_ovo').classList.remove('active'); }
 function tglPrv() {
-const wrapper = document.getElementById('prv_wrap');
-const list = document.getElementById('prv_lst');
-list.classList.toggle('show');
-wrapper.classList.toggle('open');
+    const wrapper = document.getElementById('prv_wrap');
+    const list = document.getElementById('prv_lst');
+    list.classList.toggle('show');
+    wrapper.classList.toggle('open');
 }
 function selPrv(name, url, element) {
-selUrl = url;
-document.getElementById('prv_sel').innerText = name;
-document.querySelectorAll('.prv_opt').forEach(opt => opt.classList.remove('active'));
-element.classList.add('active');
-tglPrv();
+    selUrl = url;
+    document.getElementById('prv_sel').innerText = name;
+    document.querySelectorAll('.prv_opt').forEach(opt => opt.classList.remove('active'));
+    element.classList.add('active');
+    tglPrv();
 }
 function svMod() {
-const name = document.getElementById('new_mod_id').value.trim();
-const key = document.getElementById('new_api_key').value.trim();
-const cyrillicRegex = /[а-яА-ЯёЁ]/;
-if (cyrillicRegex.test(name) || cyrillicRegex.test(key)) {
-popTst("Ошибка: русские буквы запрещены");
-return;
-}
-if (!name || !key) { popTst("Заполните все поля"); return; }
-myMods.push({ name: name, apiName: name, url: selUrl, key: key });
-saveAll();
-saveKeys();
-document.getElementById('new_mod_id').value = '';
-document.getElementById('new_api_key').value = '';
-drawMods();
-clsAdd();
-popTst("Модель добавлена!");
+    const name = document.getElementById('new_mod_id').value.trim();
+    const key = document.getElementById('new_api_key').value.trim();
+    const cyrillicRegex = /[а-яА-ЯёЁ]/;
+    if (cyrillicRegex.test(name) || cyrillicRegex.test(key)) {
+        popTst("Ошибка: русские буквы запрещены");
+        return;
+    }
+    if (!name || !key) { popTst("Заполните все поля"); return; }
+    myMods.push({ name: name, apiName: name, url: selUrl, key: key });
+    saveAll();
+    saveKeys();
+    document.getElementById('new_mod_id').value = '';
+    document.getElementById('new_api_key').value = '';
+    drawMods();
+    clsAdd();
+    popTst("Модель добавлена!");
 }
 
 function drawMods() {
-const listContainer = document.getElementById('mod_lst');
-listContainer.innerHTML = '';
-[...defMods, ...myMods].forEach(model => {
-const item = document.createElement('div');
-item.className = 'mod_itm';
-if (curMod && curMod.apiName === model.apiName && curMod.url === model.url) item.classList.add('active');
+    const listContainer = document.getElementById('mod_lst');
+    listContainer.innerHTML = '';
+    [...defMods, ...myMods].forEach(model => {
+        const item = document.createElement('div');
+        item.className = 'mod_itm';
+        if (curMod && curMod.apiName === model.apiName && curMod.url === model.url) item.classList.add('active');
 
-const trashIcon = `<svg class="del_mod_b" onclick="delMod(event, '${model.name}')" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+        const trashIcon = `<svg class="del_mod_b" onclick="delMod(event, '${model.name}')" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
 
-item.innerHTML = `<span>${model.name}</span>
-<div style="display:flex; gap:12px; align-items:center;">
- ${trashIcon}
-<svg class="chk_icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-</div>`;
-item.onclick = () => selMod(model.name, model.apiName, model.url, model.key, item);
-listContainer.appendChild(item);
-});
-const currentName = curMod ? (curMod.name || curMod.apiName || '') : 'Модель';
-document.getElementById('cur_mod_nm').innerText = currentName.length > 6 ? currentName.substring(0, 6) + '...' : currentName;
+        item.innerHTML = `<span>${model.name}</span>
+            <div style="display:flex; gap:12px; align-items:center;">
+                ${trashIcon}
+                <svg class="chk_icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>`;
+        item.onclick = () => selMod(model.name, model.apiName, model.url, model.key, item);
+        listContainer.appendChild(item);
+    });
+    const currentName = curMod ? (curMod.name || curMod.apiName || '') : 'Модель';
+    document.getElementById('cur_mod_nm').innerText = currentName.length > 6 ? currentName.substring(0, 6) + '...' : currentName;
 }
 
 function selMod(name, apiName, url, key, element) {
-curMod = { name, apiName, url, key };
-saveAll();
-drawMods();
-document.getElementById('mod_drpdwn').classList.remove('open');
+    curMod = { name, apiName, url, key };
+    saveAll();
+    drawMods();
+    document.getElementById('mod_drpdwn').classList.remove('open');
 }
 
 function hdlInpt() {
-const textarea = document.getElementById('chat_inpt');
-const text = textarea.value;
-const iconBars = document.getElementById('icn_bars');
-const iconArrow = document.getElementById('icn_aro');
-const iconStop = document.getElementById('icn_stp');
-const welcome = document.getElementById('welcm_scrn');
-const sendBtn = document.getElementById('snd_b');
-textarea.style.height = 'auto';
-textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
-if (isBusy) {
-iconBars.style.display = 'none';
-iconArrow.style.display = 'none';
-iconStop.style.display = 'block';
-sendBtn.classList.add('generating');
-return;
-}
-sendBtn.classList.remove('generating');
-if (text.trim().length > 0) {
-iconBars.style.display = 'none';
-iconArrow.style.display = 'block';
-iconStop.style.display = 'none';
-if (welcome) welcome.classList.add('hidden');
-} else {
-iconBars.style.display = 'block';
-iconArrow.style.display = 'none';
-iconStop.style.display = 'none';
-if (welcome && getCht().messages.length === 0) welcome.classList.remove('hidden');
-}
+    const textarea = document.getElementById('chat_inpt');
+    const text = textarea.value;
+    const iconBars = document.getElementById('icn_bars');
+    const iconArrow = document.getElementById('icn_aro');
+    const iconStop = document.getElementById('icn_stp');
+    const welcome = document.getElementById('welcm_scrn');
+    const sendBtn = document.getElementById('snd_b');
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
+    if (isBusy) {
+        iconBars.style.display = 'none';
+        iconArrow.style.display = 'none';
+        iconStop.style.display = 'block';
+        sendBtn.classList.add('generating');
+        return;
+    }
+    sendBtn.classList.remove('generating');
+    if (text.trim().length > 0) {
+        iconBars.style.display = 'none';
+        iconArrow.style.display = 'block';
+        iconStop.style.display = 'none';
+        if (welcome) welcome.classList.add('hidden');
+    } else {
+        iconBars.style.display = 'block';
+        iconArrow.style.display = 'none';
+        iconStop.style.display = 'none';
+        if (welcome && getCht().messages.length === 0) welcome.classList.remove('hidden');
+    }
 }
 
 function hdlEntr(event) {
-if (event.key === 'Enter' && !event.shiftKey) {
-event.preventDefault();
-hdlSnd();
-}
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        hdlSnd();
+    }
 }
 
 function hdlSnd() {
-if (isBusy) stpGen();
-else sndMsg();
+    if (isBusy) stpGen();
+    else sndMsg();
 }
 
 function stpGen() { if (ctrl) ctrl.abort(); }
 
 async function doStuff(action, args) {
-console.log(`Agent Action: ${action} with args: ${args}`);
-if (window.Capacitor && Fs) {
-try {
-if (action === 'cd') {
-curDir = args.trim();
-popTst(`Папка изменена: ${curDir}`);
-return;
-}
-let fullPath = args;
-if (!fullPath.startsWith('/') && !fullPath.startsWith('Documents/')) {
-fullPath = curDir + '/' + args;
-}
+    if (window.Capacitor && Fs) {
+        try {
+            if (action === 'cd') {
+                curDir = args.trim();
+                popTst(`Папка изменена: ${curDir}`);
+                return;
+            }
+            let fullPath = args;
+            if (!fullPath.startsWith('/') && !fullPath.startsWith('Documents/')) {
+                fullPath = curDir + '/' + args;
+            }
 
-if (action === 'create') {
-await Fs.writeFile({ path: fullPath, data: '', directory: "DOCUMENTS", encoding: "utf8", recursive: true });
-popTst(`Файл создан: ${fullPath}`);
-} else if (action === 'folder') {
-await Fs.mkdir({ path: fullPath, directory: "DOCUMENTS", recursive: true });
-popTst(`Папка создана: ${fullPath}`);
-} else if (action === 'delete') {
-await Fs.rmdir({ path: fullPath, directory: "DOCUMENTS", recursive: true });
-popTst(`Удалено: ${fullPath}`);
-}
-} catch (e) { 
-if (e.message.includes('denied') || e.message.includes('permission') || e.message.includes('does not have')) {
-if (AppC) {
-AppC.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
-} else {
-popTst("Нет доступа к файлам. Открой настройки приложения.");
-}
-} else {
-popTst(`Ошибка ФС: ${e.message}`); 
-}
-}
-} else {
-popTst(`Mock: ${action} ${args}`);
-}
+            if (action === 'create') {
+                await Fs.writeFile({ path: fullPath, data: '', directory: "DOCUMENTS", encoding: "utf8", recursive: true });
+                popTst(`Файл создан: ${fullPath}`);
+            } else if (action === 'folder') {
+                await Fs.mkdir({ path: fullPath, directory: "DOCUMENTS", recursive: true });
+                popTst(`Папка создана: ${fullPath}`);
+            } else if (action === 'delete') {
+                await Fs.rmdir({ path: fullPath, directory: "DOCUMENTS", recursive: true });
+                popTst(`Удалено: ${fullPath}`);
+            }
+        } catch (e) { 
+            if (e.message.includes('denied') || e.message.includes('permission') || e.message.includes('does not have')) {
+                if (AppC) {
+                    AppC.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
+                } else {
+                    popTst("Нет доступа к файлам. Открой настройки приложения.");
+                }
+            } else {
+                popTst(`Ошибка ФС: ${e.message}`); 
+            }
+        }
+    } else {
+        popTst(`Mock: ${action} ${args}`);
+    }
 }
 function procActs(text) {
-const actionRegex = /\[(create|folder|rename|open|delete|cd):?([^\]]*)\]/g;
-let match;
-while ((match = actionRegex.exec(text)) !== null) {
-doStuff(match[1], match[2] || "");
-}
+    const actionRegex = /\[(create|folder|rename|open|delete|cd):?([^\]]*)\]/g;
+    let match;
+    while ((match = actionRegex.exec(text)) !== null) {
+        doStuff(match[1], match[2] || "");
+    }
 }
 
 function tglBlk(headerEl) {
-const block = headerEl.closest('.cde_blk');
-const codeEl = block.querySelector('code');
-if (!codeEl) return;
-const content = codeEl.innerText;
-if (block.classList.contains('collapsed')) {
-block.classList.remove('collapsed');
-clpsdBlks.delete(content);
-} else {
-block.classList.add('collapsed');
-clpsdBlks.add(content);
-}
+    const block = headerEl.closest('.cde_blk');
+    const codeEl = block.querySelector('code');
+    if (!codeEl) return;
+    const content = codeEl.innerText;
+    if (block.classList.contains('collapsed')) {
+        block.classList.remove('collapsed');
+        clpsdBlks.delete(content);
+    } else {
+        block.classList.add('collapsed');
+        clpsdBlks.add(content);
+    }
 }
 
 function opnPrv(btn) {
-const code = btn.closest('.cde_blk').querySelector('code').innerText;
-const iframe = document.getElementById('prv_ifrm');
-const blob = new Blob([code], {type: 'text/html'});
-iframe.src = URL.createObjectURL(blob);
-document.getElementById('html_prv').classList.add('active');
+    const code = btn.closest('.cde_blk').querySelector('code').innerText;
+    const iframe = document.getElementById('prv_ifrm');
+    const blob = new Blob([code], {type: 'text/html'});
+    iframe.src = URL.createObjectURL(blob);
+    document.getElementById('html_prv').classList.add('active');
 }
 function clsPrv() {
-const iframe = document.getElementById('prv_ifrm');
-if (iframe.src.startsWith('blob:')) URL.revokeObjectURL(iframe.src);
-iframe.src = 'about:blank';
-document.getElementById('html_prv').classList.remove('active');
+    const iframe = document.getElementById('prv_ifrm');
+    if (iframe.src.startsWith('blob:')) URL.revokeObjectURL(iframe.src);
+    iframe.src = 'about:blank';
+    document.getElementById('html_prv').classList.remove('active');
 }
 
 function mkMd(text, isStreaming = false) {
-const codeBlocks = [];
-const actionBlocks = [];
-text = text.replace(/\[cd:[^\]]+\]/g, '');
-text = text.replace(/\[info\]/g, '');
-const actionRegex = /\[(create|folder|rename|open|delete):?([^\]]*)\]/g;
-text = text.replace(actionRegex, (match, action, args) => {
-let actionText = "", iconName = "file", displayArgs = args;
-if (action === 'create') actionText = "create file";
-else if (action === 'folder') { actionText = "create folder"; iconName = "folder"; }
-else if (action === 'rename') { actionText = "rename file"; const parts = args.split(':'); if (parts.length === 2) displayArgs = `${parts[1]} -> ${parts[0]}`; }
-else if (action === 'open') actionText = "open file";
-else if (action === 'delete') { actionText = "delete file"; iconName = "trash"; }
-const fileIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
-const folderIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
-const trashIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
-let iconHtml = fileIcon;
-if (iconName === 'folder') iconHtml = folderIcon;
-if (iconName === 'trash') iconHtml = trashIcon;
-const arrowHtml = `<svg class="tggl_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-const isCollapsed = isStreaming ? clpsdBlks.has(displayArgs) : true;
-const blockClass = isCollapsed ? 'collapsed' : '';
-const blockHtml = `<div class="cde_blk ${blockClass}"><div class="cde_hd" onclick="tglBlk(this)"><span class="lang">${actionText}</span><div class="acts">${iconHtml}${arrowHtml}</div></div><div class="cde_wrap"><div class="cde_cnt"><code>${displayArgs}</code></div></div></div>`;
-actionBlocks.push(blockHtml);
-return `%%ACTIONBLOCK_${actionBlocks.length - 1}%%`;
-});
+    const codeBlocks = [];
+    const actionBlocks = [];
+    text = text.replace(/\[cd:[^\]]+\]/g, '');
+    text = text.replace(/\[info\]/g, '');
+    const actionRegex = /\[(create|folder|rename|open|delete):?([^\]]*)\]/g;
+    text = text.replace(actionRegex, (match, action, args) => {
+        let actionText = "", iconName = "file", displayArgs = args;
+        if (action === 'create') actionText = "create file";
+        else if (action === 'folder') { actionText = "create folder"; iconName = "folder"; }
+        else if (action === 'rename') { actionText = "rename file"; const parts = args.split(':'); if (parts.length === 2) displayArgs = `${parts[1]} -> ${parts[0]}`; }
+        else if (action === 'open') actionText = "open file";
+        else if (action === 'delete') { actionText = "delete file"; iconName = "trash"; }
+        const fileIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
+        const folderIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
+        const trashIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+        let iconHtml = fileIcon;
+        if (iconName === 'folder') iconHtml = folderIcon;
+        if (iconName === 'trash') iconHtml = trashIcon;
+        const arrowHtml = `<svg class="tggl_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+        const isCollapsed = isStreaming ? clpsdBlks.has(displayArgs) : true;
+        const blockClass = isCollapsed ? 'collapsed' : '';
+        const blockHtml = `<div class="cde_blk ${blockClass}"><div class="cde_hd" onclick="tglBlk(this)"><span class="lang">${actionText}</span><div class="acts">${iconHtml}${arrowHtml}</div></div><div class="cde_wrap"><div class="cde_cnt"><code>${displayArgs}</code></div></div></div>`;
+        actionBlocks.push(blockHtml);
+        return `%%ACTIONBLOCK_${actionBlocks.length - 1}%%`;
+    });
 
-let displayText = text;
-if (isStreaming) {
-const openCount = (text.match(/```/g) || []).length;
-if (openCount % 2 !== 0) {
-const lastOpenIndex = text.lastIndexOf('```');
-displayText = text.substring(0, lastOpenIndex);
-}
-}
+    let displayText = text;
+    if (isStreaming) {
+        const openCount = (text.match(/```/g) || []).length;
+        if (openCount % 2 !== 0) {
+            const lastOpenIndex = text.lastIndexOf('```');
+            displayText = text.substring(0, lastOpenIndex);
+        }
+    }
 
-const codeRegex = /```([\w-]*)\n?([\s\S]*?)```/g;
-displayText = displayText.replace(codeRegex, (match, lang, code) => {
-const validLang = lang || 'txt';
-const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;').trim();
-const arrowHtml = `<svg class="tggl_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-const previewBtn = validLang.toLowerCase() === 'html' ? `<button onclick="opnPrv(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></button>` : '';
-const isCollapsed = isStreaming ? clpsdBlks.has(escapedCode) : true;
-const blockClass = isCollapsed ? 'collapsed' : '';
-const blockHtml = `<div class="cde_blk ${blockClass}"><div class="cde_hd" onclick="tglBlk(this)"><span class="lang">${validLang}</span><div class="acts"><button onclick="cpCde(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button><button onclick="dlCde(this, '${validLang}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>${previewBtn}${arrowHtml}</div></div><div class="cde_wrap"><div class="cde_cnt"><code>${escapedCode}</code></div></div></div>`;
-codeBlocks.push(blockHtml);
-return `%%CODEBLK_${codeBlocks.length - 1}%%`;
-});
+    const codeRegex = /```([\w-]*)\n?([\s\S]*?)```/g;
+    displayText = displayText.replace(codeRegex, (match, lang, code) => {
+        const validLang = lang || 'txt';
+        const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;').trim();
+        const arrowHtml = `<svg class="tggl_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+        const previewBtn = validLang.toLowerCase() === 'html' ? `<button onclick="opnPrv(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></button>` : '';
+        const isCollapsed = isStreaming ? clpsdBlks.has(escapedCode) : true;
+        const blockClass = isCollapsed ? 'collapsed' : '';
+        const blockHtml = `<div class="cde_blk ${blockClass}"><div class="cde_hd" onclick="tglBlk(this)"><span class="lang">${validLang}</span><div class="acts"><button onclick="cpCde(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button><button onclick="dlCde(this, '${validLang}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>${previewBtn}${arrowHtml}</div></div><div class="cde_wrap"><div class="cde_cnt"><code>${escapedCode}</code></div></div></div>`;
+        codeBlocks.push(blockHtml);
+        return `%%CODEBLK_${codeBlocks.length - 1}%%`;
+    });
 
-let safeText = displayText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-let html = marked.parse(safeText);
-html = html.replace(/<p>%%ACTIONBLOCK_(\d+)%%<\/p>/g, (match, index) => actionBlocks[parseInt(index)]);
-html = html.replace(/%%ACTIONBLOCK_(\d+)%%/g, (match, index) => actionBlocks[parseInt(index)]);
-html = html.replace(/<p>%%CODEBLK_(\d+)%%<\/p>/g, (match, index) => codeBlocks[parseInt(index)]);
-html = html.replace(/%%CODEBLK_(\d+)%%/g, (match, index) => codeBlocks[parseInt(index)]);
-return html;
+    let safeText = displayText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let html = marked.parse(safeText);
+    html = html.replace(/<p>%%ACTIONBLOCK_(\d+)%%<\/p>/g, (match, index) => actionBlocks[parseInt(index)]);
+    html = html.replace(/%%ACTIONBLOCK_(\d+)%%/g, (match, index) => actionBlocks[parseInt(index)]);
+    html = html.replace(/<p>%%CODEBLK_(\d+)%%<\/p>/g, (match, index) => codeBlocks[parseInt(index)]);
+    html = html.replace(/%%CODEBLK_(\d+)%%/g, (match, index) => codeBlocks[parseInt(index)]);
+    return html;
 }
 
 function isBottom() {
-const chat = document.getElementById('chat_cont');
-return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 150;
+    const chat = document.getElementById('chat_cont');
+    return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 150;
 }
 
 async function sndMsg(isRetry = false) {
-if (!curMod) { popTst("Сначала добавьте модель"); return; }
-if (isBusy) return;
-isBusy = true;
-hdlInpt(); 
+    if (!curMod) { popTst("Сначала добавьте модель"); return; }
+    if (isBusy) return;
+    isBusy = true;
+    hdlInpt(); 
 
-const chatObj = getCht();
-document.querySelectorAll('.rtry_btn').forEach(btn => btn.remove());
+    const chatObj = getCht();
+    document.querySelectorAll('.rtry_btn').forEach(btn => btn.remove());
 
-const input = document.getElementById('chat_inpt');
-const chat = document.getElementById('chat_cont');
-let text = "";
-if (!isRetry) {
-text = input.value.trim();
-if (!text) { 
-isBusy = false; 
-hdlInpt(); 
-return; 
-}
-input.value = '';
-hdlInpt(); 
+    const input = document.getElementById('chat_inpt');
+    const chat = document.getElementById('chat_cont');
+    let text = "";
+    if (!isRetry) {
+        text = input.value.trim();
+        if (!text) { 
+            isBusy = false; 
+            hdlInpt(); 
+            return; 
+        }
+        input.value = '';
+        hdlInpt(); 
 
-const fileMatch = text.match(/file:\s*([^\s]+)/i);
-if (fileMatch) {
-const filePath = fileMatch[1];
-try {
-const result = await Fs.readFile({ path: filePath, directory: "DOCUMENTS", encoding: "utf8" });
-text += `\n\n[Содержимое файла ${filePath}]:\n${result.data}`;
-popTst(`Файл ${filePath} прочитан`);
-} catch (e) {
-text += `\n\n[Ошибка чтения файла ${filePath}: ${e.message}]`;
-popTst(`Ошибка чтения: ${e.message}`);
-}
-}
+        const fileMatch = text.match(/file:\s*([^\s]+)/i);
+        if (fileMatch) {
+            const filePath = fileMatch[1];
+            try {
+                const result = await Fs.readFile({ path: filePath, directory: "DOCUMENTS", encoding: "utf8" });
+                text += `\n\n[Содержимое файла ${filePath}]:\n${result.data}`;
+                popTst(`Файл ${filePath} прочитан`);
+            } catch (e) {
+                text += `\n\n[Ошибка чтения файла ${filePath}: ${e.message}]`;
+                popTst(`Ошибка чтения: ${e.message}`);
+            }
+        }
 
-chatObj.messages.push({role: "user", content: text});
-const userMsg = document.createElement('div');
-userMsg.className = 'msj usr';
-userMsg.innerText = text;
-chat.appendChild(userMsg);
-if (chatObj.title === "Новый чат") {
-chatObj.title = text.substring(0, 20) + (text.length > 20 ? '...' : '');
-drawChats();
-}
-}
+        chatObj.messages.push({role: "user", content: text});
+        const userMsg = document.createElement('div');
+        userMsg.className = 'msj usr';
+        userMsg.innerText = text;
+        chat.appendChild(userMsg);
+        if (chatObj.title === "Новый чат") {
+            chatObj.title = text.substring(0, 20) + (text.length > 20 ? '...' : '');
+            drawChats();
+        }
+    }
 
-updNewBtn();
-document.body.classList.add('chat-active');
-const welcome = document.getElementById('welcm_scrn');
-if (welcome) welcome.remove();
+    updNewBtn();
+    document.body.classList.add('chat-active');
+    const welcome = document.getElementById('welcm_scrn');
+    if (welcome) welcome.remove();
 
-const wrapper = document.createElement('div');
-wrapper.className = 'ai_wrap';
-const aiMsg = document.createElement('div');
-aiMsg.className = 'msj bot';
-aiMsg.innerHTML = `<div class="typ_dots"><span></span><span></span><span></span></div>`;
-wrapper.appendChild(aiMsg);
-chat.appendChild(wrapper);
-chat.scrollTop = chat.scrollHeight;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'ai_wrap';
+    const aiMsg = document.createElement('div');
+    aiMsg.className = 'msj bot';
+    aiMsg.innerHTML = `<div class="typ_dots"><span></span><span></span><span></span></div>`;
+    wrapper.appendChild(aiMsg);
+    chat.appendChild(wrapper);
+    chat.scrollTop = chat.scrollHeight;
 
-let systemContent = usrPrm;
-if (isLocal) {
-systemContent = HID_PRM + "\n" + usrPrm;
-}
-if (isThink) {
-systemContent += "\n" + RSN_PRM;
-}
+    let systemContent = usrPrm;
+    if (isLocal) {
+        systemContent = HID_PRM + "\n" + usrPrm;
+    }
+    if (isThink) {
+        systemContent += "\n" + RSN_PRM;
+    }
 
-const messagesToSend = [
-{ role: "system", content: systemContent },
-...chatObj.messages
-];
+    const messagesToSend = [
+        { role: "system", content: systemContent },
+        ...chatObj.messages
+    ];
 
-let fullText = "";
+    let fullText = "";
 
-ctrl = new AbortController();
+    ctrl = new AbortController();
 
-try {
-const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${curMod.key}` };
-if (curMod.url.includes('openrouter.ai')) {
-headers["HTTP-Referer"] = "https://zimo.app";
-headers["X-Title"] = "Zimo App";
-}
+    try {
+        const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${curMod.key}` };
+        if (curMod.url.includes('openrouter.ai')) {
+            headers["HTTP-Referer"] = "https://zimo.app";
+            headers["X-Title"] = "Zimo App";
+        }
 
-const bodyData = { model: curMod.apiName, messages: messagesToSend, stream: true };
+        const bodyData = { model: curMod.apiName, messages: messagesToSend, stream: true };
 
-const response = await fetch(curMod.url, {
-method: "POST",
-headers: headers,
-body: JSON.stringify(bodyData),
-signal: ctrl.signal 
-});
+        const response = await fetch(curMod.url, {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify(bodyData),
+            signal: ctrl.signal 
+        });
 
-if (!response.ok) {
-let errMsg = `Ошибка API: ${response.status}`;
-try {
-const errData = await response.json();
-if (errData.error && errData.error.message) errMsg = errData.error.message;
-} catch (e) {}
-throw new Error(errMsg);
-}
+        if (!response.ok) {
+            let errMsg = `Ошибка API: ${response.status}`;
+            try {
+                const errData = await response.json();
+                if (errData.error && errData.error.message) errMsg = errData.error.message;
+            } catch (e) {}
+            throw new Error(errMsg);
+        }
 
-const reader = response.body.getReader();
-const decoder = new TextDecoder("utf-8");
-let buffer = "";
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
 
-while (true) {
-const { done, value } = await reader.read();
-if (done) break;
-buffer += decoder.decode(value, { stream: true });
-const lines = buffer.split("\n");
-buffer = lines.pop(); 
-for (const line of lines) {
-if (line.startsWith("data: ")) {
-const jsonStr = line.replace("data: ", "");
-if (jsonStr === "[DONE]") break;
-try {
-const json = JSON.parse(jsonStr);
-const delta = json.choices[0].delta;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop(); 
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    const jsonStr = line.replace("data: ", "");
+                    if (jsonStr === "[DONE]") break;
+                    try {
+                        const json = JSON.parse(jsonStr);
+                        const delta = json.choices[0].delta;
 
-if (delta && delta.content) {
-fullText += delta.content;
+                        if (delta && delta.content) {
+                            fullText += delta.content;
 
-let displayText = fullText;
-let currentReasoningText = "";
-const trimmedFull = fullText.trimStart();
+                            let displayText = fullText;
+                            let currentReasoningText = "";
+                            const trimmedFull = fullText.trimStart();
 
-if (isThink && trimmedFull.startsWith("+++")) {
-const secondPlus = trimmedFull.indexOf("+++", 3);
-if (secondPlus !== -1) {
-currentReasoningText = trimmedFull.substring(3, secondPlus).trim();
-displayText = trimmedFull.substring(secondPlus + 3).trim();
-} else {
-currentReasoningText = trimmedFull.substring(3).trim();
-displayText = ""; 
-}
-}
+                            if (isThink && trimmedFull.startsWith("+++")) {
+                                const secondPlus = trimmedFull.indexOf("+++", 3);
+                                if (secondPlus !== -1) {
+                                    currentReasoningText = trimmedFull.substring(3, secondPlus).trim();
+                                    displayText = trimmedFull.substring(secondPlus + 3).trim();
+                                } else {
+                                    currentReasoningText = trimmedFull.substring(3).trim();
+                                    displayText = ""; 
+                                }
+                            }
 
-let htmlToRender = "";
-if (currentReasoningText) {
-htmlToRender += `<div class="rsn_blk" onclick="this.classList.toggle('open')"><div class="rsn_hd"><svg class="rsn_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Размышления...</div><div class="rsn_txt">${currentReasoningText}</div></div>`;
-}
+                            let htmlToRender = "";
+                            if (currentReasoningText) {
+                                htmlToRender += `<div class="rsn_blk" onclick="this.classList.toggle('open')"><div class="rsn_hd"><svg class="rsn_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Размышления...</div><div class="rsn_txt">${currentReasoningText}</div></div>`;
+                            }
 
-if (displayText) {
-htmlToRender += mkMd(displayText, true);
-} else if (!currentReasoningText) {
-htmlToRender += `<div class="typ_dots"><span></span><span></span><span></span></div>`;
-}
+                            if (displayText) {
+                                htmlToRender += mkMd(displayText, true);
+                            } else if (!currentReasoningText) {
+                                htmlToRender += `<div class="typ_dots"><span></span><span></span><span></span></div>`;
+                            }
 
-aiMsg.innerHTML = htmlToRender;
-if (isBottom()) chat.scrollTop = chat.scrollHeight;
-}
-} catch (e) { }
-}
-}
-}
-} catch (error) {
-if (error.name === 'AbortError') {
-if (!fullText) fullText = "Генерация остановлена.";
-} else {
-fullText = "Ошибка: " + error.message;
-}
-aiMsg.innerHTML = mkMd(fullText, true);
-}
+                            aiMsg.innerHTML = htmlToRender;
+                            if (isBottom()) chat.scrollTop = chat.scrollHeight;
+                        }
+                    } catch (e) { }
+                }
+            }
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            if (!fullText) fullText = "Генерация остановлена.";
+        } else {
+            fullText = "Ошибка: " + error.message;
+        }
+        aiMsg.innerHTML = mkMd(fullText, true);
+    }
 
-procActs(fullText);
+    procActs(fullText);
 
-let finalDisplayText = fullText;
-let finalReasoningText = "";
-const trimmedFull = fullText.trimStart();
-if (isThink && trimmedFull.startsWith("+++")) {
-const secondPlus = trimmedFull.indexOf("+++", 3);
-if (secondPlus !== -1) {
-finalReasoningText = trimmedFull.substring(3, secondPlus).trim();
-finalDisplayText = trimmedFull.substring(secondPlus + 3).trim();
-} else {
-finalReasoningText = "";
-finalDisplayText = fullText;
-}
-}
+    let finalDisplayText = fullText;
+    let finalReasoningText = "";
+    const trimmedFull = fullText.trimStart();
+    if (isThink && trimmedFull.startsWith("+++")) {
+        const secondPlus = trimmedFull.indexOf("+++", 3);
+        if (secondPlus !== -1) {
+            finalReasoningText = trimmedFull.substring(3, secondPlus).trim();
+            finalDisplayText = trimmedFull.substring(secondPlus + 3).trim();
+        } else {
+            finalReasoningText = "";
+            finalDisplayText = fullText;
+        }
+    }
 
-let finalHtml = "";
-if (finalReasoningText) {
-finalHtml += `<div class="rsn_blk" onclick="this.classList.toggle('open')"><div class="rsn_hd"><svg class="rsn_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Размышления...</div><div class="rsn_txt">${finalReasoningText}</div></div>`;
-}
-finalHtml += mkMd(finalDisplayText, false);
-aiMsg.innerHTML = finalHtml;
+    let finalHtml = "";
+    if (finalReasoningText) {
+        finalHtml += `<div class="rsn_blk" onclick="this.classList.toggle('open')"><div class="rsn_hd"><svg class="rsn_aro" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Размышления...</div><div class="rsn_txt">${finalReasoningText}</div></div>`;
+    }
+    finalHtml += mkMd(finalDisplayText, false);
+    aiMsg.innerHTML = finalHtml;
 
-if (isBottom()) chat.scrollTop = chat.scrollHeight;
+    if (isBottom()) chat.scrollTop = chat.scrollHeight;
 
-chatObj.messages.push({role: "assistant", content: fullText});
-saveAll();
+    chatObj.messages.push({role: "assistant", content: fullText});
+    saveAll();
 
-const actions = document.createElement('div');
-actions.className = 'bot_acts';
-actions.innerHTML = `<button onclick="cpTxt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button><button class="rtry_btn" onclick="rtryMsg(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>`;
-wrapper.appendChild(actions);
-chat.scrollTop = chat.scrollHeight;
+    const actions = document.createElement('div');
+    actions.className = 'bot_acts';
+    actions.innerHTML = `<button onclick="cpTxt(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button><button class="rtry_btn" onclick="rtryMsg(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>`;
+    wrapper.appendChild(actions);
+    chat.scrollTop = chat.scrollHeight;
 
-isBusy = false;
-ctrl = null;
-hdlInpt(); 
+    isBusy = false;
+    ctrl = null;
+    hdlInpt(); 
 }
 
 function rtryMsg(btn) {
-if (isBusy) return;
-const wrapper = btn.closest('.ai_wrap');
-wrapper.remove();
-const chatObj = getCht();
-if (chatObj.messages.length > 0 && chatObj.messages[chatObj.messages.length - 1].role === 'assistant') {
-chatObj.messages.pop();
-saveAll();
-}
-sndMsg(true);
+    if (isBusy) return;
+    const wrapper = btn.closest('.ai_wrap');
+    wrapper.remove();
+    const chatObj = getCht();
+    if (chatObj.messages.length > 0 && chatObj.messages[chatObj.messages.length - 1].role === 'assistant') {
+        chatObj.messages.pop();
+        saveAll();
+    }
+    sndMsg(true);
 }
 
 function cpTxt(btn) {
-const wrapper = btn.closest('.ai_wrap');
-const textToCopy = wrapper.querySelector('.msj.bot').innerText;
-navigator.clipboard.writeText(textToCopy);
-popTst("Скопировано!");
+    const wrapper = btn.closest('.ai_wrap');
+    const textToCopy = wrapper.querySelector('.msj.bot').innerText;
+    navigator.clipboard.writeText(textToCopy);
+    popTst("Скопировано!");
 }
 
 function cpCde(btn) {
-const code = btn.closest('.cde_blk').querySelector('code').innerText;
-navigator.clipboard.writeText(code);
-popTst("Код скопирован!");
+    const code = btn.closest('.cde_blk').querySelector('code').innerText;
+    navigator.clipboard.writeText(code);
+    popTst("Код скопирован!");
 }
 
 function dlCde(btn, lang) {
-const code = btn.closest('.cde_blk').querySelector('code').innerText;
-const langMap = { 'javascript': 'js', 'js': 'js', 'typescript': 'ts', 'ts': 'ts', 'python': 'py', 'py': 'py', 'html': 'html', 'css': 'css', 'json': 'json', 'txt': 'txt' };
-let ext = langMap[lang.toLowerCase()] || 'txt';
-const blob = new Blob([code], {type: 'text/plain'});
-const link = document.createElement('a');
-link.href = URL.createObjectURL(blob);
-link.download = `code.${ext}`;
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
-popTst("Файл скачан!");
+    const code = btn.closest('.cde_blk').querySelector('code').innerText;
+    const langMap = { 'javascript': 'js', 'js': 'js', 'typescript': 'ts', 'ts': 'ts', 'python': 'py', 'py': 'py', 'html': 'html', 'css': 'css', 'json': 'json', 'txt': 'txt' };
+    let ext = langMap[lang.toLowerCase()] || 'txt';
+    const blob = new Blob([code], {type: 'text/plain'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `code.${ext}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    popTst("Файл скачан!");
 }
 
 function tglMnu(state) {
-document.getElementById('sid_mnu').classList.toggle('active', state);
-document.getElementById('ovrl').classList.toggle('active', state);
+    document.getElementById('sid_mnu').classList.toggle('active', state);
+    document.getElementById('ovrl').classList.toggle('active', state);
 }
 
 function tglModDp() { document.getElementById('mod_drpdwn').classList.toggle('open'); }
 
 window.onload = async function() {
-await loadAll();
-if (window.Capacitor && Fs) {
-Fs.requestPermissions().then(status => {
-console.log("Permission requested:", status);
-});
-
-if (localStorage.getItem('zimo_backup_agreed') === null) {
-document.getElementById('bkp_ovo').classList.add('active');
-}
-
-Fs.writeFile({
-path: 'zimoimgayzimo.txt',
-data: 'testimgayyyyyy',
-directory: "DOCUMENTS",
-encoding: "utf8"
-}).catch(err => {
-if (AppC) {
-AppC.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
-}
-});
-}
+    if (await getVal('zimo_backup_agreed') === null) {
+        document.getElementById('bkp_ovo').classList.add('active');
+    }
+    await loadAll();
+    if (window.Capacitor && Fs) {
+        Fs.requestPermissions().then(status => {
+            Fs.writeFile({
+                path: 'zimo_check.txt',
+                data: 'test',
+                directory: "DOCUMENTS",
+                encoding: "utf8"
+            }).catch(err => {
+                if (AppC) {
+                    AppC.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
+                }
+            });
+        });
+    }
 };
 </script>
 </body>
-</html>
+ </html>
