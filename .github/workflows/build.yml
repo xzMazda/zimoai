@@ -27,7 +27,7 @@ jobs:
     - name: Install Capacitor
       run: |
         npm init -y
-        npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem
+        npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem @capacitor/app
 
     - name: Prepare Config
       run: echo '{"appId":"com.zimocode.app","appName":"Zimo Code","webDir":"www"}' > capacitor.config.json
