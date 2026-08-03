@@ -240,7 +240,7 @@
         }
         
         let currentDir = 'Documents';
-        const APP_SYSTEM_PROMPT = "Ты работаешь в папке Documents (Документы) на телефоне пользователя. По умолчанию все файлы создаются там. Чтобы сменить папку пиши [cd:Путь] (например [cd:Documents/MyProject]). Чтобы создать файл пиши [create:НазваниеФайла]. Чтобы создать папку пиши [folder:Название]. Чтобы переименовать файл/папку пиши [rename:НовоеНазвание:СтароеНазвание]. Чтобы открыть код файла пиши [open:НазваниеФайла]. Чтобы удалить файл пиши [delete:НазваниеФайла]. [info] - если напишешь эту команду, получишь информацию о телефоне. всегда когда пишешь код, пиши сначало название файла куда его поместишь, а затем сам код.";
+        const APP_SYSTEM_PROMPT = "Ты работаешь в папке Documents (Документы) на телефоне пользователя. Все файлы создаются там. Чтобы сменить папку пиши [cd:Путь]. Чтобы создать файл пиши [create:НазваниеФайла]. Чтобы создать папку пиши [folder:Название]. Чтобы переименовать файл/папку пиши [rename:НовоеНазвание:СтароеНазвание]. Чтобы открыть код файла пиши [open:НазваниеФайла]. Чтобы удалить файл пиши [delete:НазваниеФайла]. [info] - если напишешь эту команду, получишь информацию о телефоне. всегда когда пишешь код, пиши сначало название файла куда его поместишь, а затем сам код.";
         const REASONING_PROMPT = "пиши мысли в слух, пиши свои мысли прямо в начале сообщения, Но перед мыслями ВСЕГДА ставь 3 плюсика. а когда закончишь пиши комбинацию из трех плюсов и на новой строчке отвечай пользователю.";
         let userSystemPrompt = "Ты Zimo, упоминай это тогда когда нужно, ты сделан компанией которая тебя и сделала. Общайся с пользователем.";
         
@@ -600,10 +600,10 @@
 
                     if (action === 'create') {
                         await Filesystem.writeFile({ path: fullPath, data: '', directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
-                        showToast(`Файл создан: ${fullPath}`);
+                        showToast(`Файл создан: ${fullPath} (Ищите в папке Документы)`);
                     } else if (action === 'folder') {
                         await Filesystem.mkdir({ path: fullPath, directory: Directory.Documents, recursive: true });
-                        showToast(`Папка создана: ${fullPath}`);
+                        showToast(`Папка создана: ${fullPath} (Ищите в папке Документы)`);
                     } else if (action === 'delete') {
                         await Filesystem.rmdir({ path: fullPath, directory: Directory.Documents, recursive: true });
                         showToast(`Удалено: ${fullPath}`);
@@ -611,7 +611,7 @@
                 } catch (e) { 
                     if (e.message.includes('denied') || e.message.includes('permission') || e.message.includes('does not have')) {
                         if (App) {
-                            App.openUrl({ url: 'android.settings.APPLICATION_DETAILS_SETTINGS?package=com.zimocode.app' });
+                            App.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
                         } else {
                             showToast("Нет доступа к файлам. Открой настройки приложения.");
                         }
@@ -970,11 +970,19 @@
         window.onload = function() {
             loadState();
             if (window.Capacitor && Filesystem) {
-                Filesystem.requestPermissions().then(status => {
-                    console.log("Permission requested:", status);
+                // При старте пытаемся создать тестовый файл. Если не выйдет — открываем настройки "Все файлы"
+                Filesystem.writeFile({
+                    path: 'zimo_permission_check.txt',
+                    data: 'test',
+                    directory: Directory.Documents,
+                    encoding: Encoding.UTF8
+                }).catch(err => {
+                    if (App) {
+                        App.openUrl({ url: 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION?package=com.zimocode.app' });
+                    }
                 });
             }
         };
     </script>
 </body>
-</html>
+                </html>
